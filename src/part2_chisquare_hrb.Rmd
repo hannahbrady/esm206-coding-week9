@@ -1,0 +1,136 @@
+---
+title: "Part 2 - Chi-Square My Version"
+author: "Hannah Brady"
+date: "12/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(janitor)
+library(broom)
+```
+
+## Read in data
+
+```{r}
+lizards <- read_csv(here("data", "lizards.csv"))
+```
+
+Viewed the data for trapped lizards in Hornada Basin LTER.
+
+We are going to focus on site and tail-breakage and proportions!
+
+## Get counts of lizards by species
+
+Species is spp. -n arranges counts in decreasing order.
+
+```{r}
+lizards %>% 
+  count(spp) %>% 
+  arrange(-n)
+```
+
+UTST species has most counts so we will just investigate that species.
+
+## Make a subset
+
+- UTST lizards
+- Sites: IBPE (enclosure grassland), RABB (rabbit mesquite site), EAST (east tarbrush site)
+- Tail condition is recorded (W = whole, B = broken)
+
+Are proportion of lizards with broken/whole tails the same across sites?
+
+```{r}
+utst <- lizards %>% 
+  filter(spp == "UTST") %>% 
+  filter(site %in% c("IBPE", "RABB", "EAST")) %>% 
+  filter(tail %in% c("B", "W"))
+```
+
+## Find counts and proportions of lizards with broken or whole tails at each site
+
+A few ways to get the same info but one way that gets it in a prettier table format for chi-square.
+
+Use count function from dplyer and count by site and tail:
+
+```{r}
+utst %>% 
+  count(site, tail)
+```
+
+Provides table in long format, not contingency table which is what we need for chi-square.
+
+Could use pivot-wider to turn the tail column into a B and W column.
+
+OR
+
+Use easier function from janitor package.
+
+```{r}
+tail_counts <- utst %>% 
+  janitor::tabyl(site, tail)
+tail_counts
+```
+
+Produces nice format that is almost contingency table format.
+
+But we also want to present the counts with proportions directly.
+
+```{r}
+tail_proportions <- tail_counts %>% 
+  # Add proportions:
+  adorn_percentages() %>% 
+  # Round the digits:
+  adorn_pct_formatting(digits = 2) %>% 
+  # Add the counts back in:
+  adorn_ns()
+# Looks so pretty! Just throw it in kable for final styling.
+```
+
+Gives proportions by site. Can see that EAST and IBPE have very similar proportions of B to W but that RABB is different. Use chi-square to figure out if it's significantly different.
+
+## COnvert to a contingency table
+
+Formatting for chi-square test contingency table:
+
+Cannot have the names of the sites be interpreted by R as a column of data. Convert it to "row names" format so it is not read as data. Site is no longer considered a variable. Use `column_to_rowname()`
+
+```{r}
+lizard_ct <- tail_counts %>% 
+  column_to_rownames(var = "site")
+```
+
+Once only thing existing in your table is counts, you can run it through the chi-square test.
+
+## Chi-square
+
+Are tail breakage and site independent of each other?
+Recall there are like three ways to ask this question that all mean the same thing.
+
+```{r}
+lizard_x2 <- chisq.test(lizard_ct)
+lizard_x2
+
+lizard_tidy <- broom::tidy(lizard_x2)
+```
+
+Outcome interpretation:
+
+chi-squared test statitic value is an aggregate indicating how diff our values are from expected null hypothesis values.
+
+See that df = 2:
+
+$$degrees of freedom = (rows - 1)*(columns - 1) = (3-1)*(2-1) = 2$$
+
+If you have a chi-squared value of 13 with 2 degrees of freedom then you get a p-value of 0.0015.
+
+Is that probability so low that I can reject the null hypothesis? Yes. Retain alternative hypothesis: site and tail breakage are NOT indepedent.
+
+Also: There is a significant association between site and tail breakage. There is a significant effect of site on tail breakage. Site and lizard tail breakage are not independent.
+
+But make these phrases reproducible:
+
+There is a significant association (i.e. non-independence) between site and lizard tail breakage ($\chi$^2^(`r lizard_tidy$parameter` = `r round(lizard_tidy$statistic,2)`, *p* = `r round(lizard_tidy$p.value,3)`)).
