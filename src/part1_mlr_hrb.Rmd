@@ -1,0 +1,133 @@
+---
+title: 'Week 9, Lab Part 1: MLR cont.'
+author: "Hannah Brady"
+date: "11/30/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(palmerpenguins)
+library(GGally)
+library(stargazer)
+```
+
+## Step 1: Attach packages and look at penguins
+
+In console did View(penguins).
+
+## Step 2: Reminder visual data exploration
+
+Use ggpairs to look at relationships of all variables.
+
+```{r}
+penguins %>% 
+  ggpairs()
+# whoa that's overwhelming
+```
+
+Parse it down to make it easier to understand.
+
+```{r}
+penguins %>% 
+  select(species, bill_length_mm:body_mass_g) %>% 
+  ggpairs(aes(color = species))
+```
+
+Within groups between my different quantitative variables, it looks like a linear relationship makes sense.
+
+### Determining non-collinearity
+Scatterplots show that nothing is too highly correlated. The overall coreelation is shown to be 0.871
+
+Highest correlation is Gentoo body_mass_g by bill_depth_mm at 0.719. Still not crazy high. Nothing is highly correlated, would not be overfitting model to add any variable based on collinearity.
+
+Seems like multiple linear regression is a good option.
+
+## Build a few different models
+
+```{r}
+lm1 <- lm(body_mass_g ~ flipper_length_mm + species, data = penguins)
+lm1
+```
+
+Adelie is reference level for species.
+40.71 mass increase for each unit of flipper length increase.
+If all other variables are equal, a Chinstrap penguin will have 206.51 times less mass than an Adelie.
+
+```{r}
+lm2 <- lm(body_mass_g ~ flipper_length_mm + species + sex, data = penguins)
+lm2
+
+lm3 <- lm(body_mass_g ~ flipper_length_mm + species + sex + bill_length_mm, data = penguins)
+lm3
+
+lm4 <- lm(body_mass_g ~ flipper_length_mm + species + sex + bill_length_mm + island, data = penguins)
+lm4
+```
+
+```{r}
+ plot(lm1) # No concerns
+ plot(lm2) # No concerns
+ plot(lm3) # No concerns
+ plot(lm4) # No concerns
+```
+
+AIC
+
+Penalizes addition of more variables and lets you know if improved model fit was worth it.
+
+Lower the value of the AIC - the better.
+
+# Find AIC for all models
+
+No packages needed, part of base R's stats package
+
+```{r}
+AIC(lm1)
+# Value by itself, means nothing! Only useful when comparing permutations of a model.
+AIC(lm2)
+AIC(lm3)
+AIC(lm4)
+```
+
+AIC loved adding sex.
+Didn't like addition of island in lm4 - not worth it!
+If only using AIC value as metric - lowest AIC value was for lm3, indicating that is the best balance of model fit and model complexity.
+
+Recall that it is only part tho of how we evaluate and make models. Think about what we already know, bg research, conceptually.
+
+## Use stargazer for a table with multiple model outputs
+
+```{r, results = 'asis'}
+stargazer(lm1, lm2, lm3, lm4, type = "html")
+```
+
+Nice table!
+Helps you see how coefficients change as you add variables.
+Great way to get to almost publication ready tables with multiple models.
+
+Example coefficient interpretation:
+lm3 bill_length_mm:
+1 mm increase in bill length is associated with a 21.633 g increase in body mass.
+Parenthesis below are the standard error.
+
+R-squared is similar, so if we were only using models for predictive capacity might not need to add variables.
+
+## Omitted variable bias
+
+```{r}
+ggplot(data = penguins, aes(x = flipper_length_mm, y = bill_depth_mm))+
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+ggplot(data = penguins, aes(x = flipper_length_mm,
+                            y = bill_depth_mm,
+                            group = species))+
+  geom_point(aes(color = species)) +
+  geom_smooth(method = "lm")
+```
+
+Species completely changes the correlation. Note actual points didn't change
